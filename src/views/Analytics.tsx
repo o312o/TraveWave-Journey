@@ -59,7 +59,6 @@ export default function Analytics() {
   }, [user]);
 
   const netProfit = stats.currentBalance - stats.initialCapital;
-  const winRate = trades.length > 0 ? (trades.filter(t => t.pnl && t.pnl > 0).length / trades.length * 100).toFixed(1) : '0.0';
 
   // Calculate Equity Curve Data
   const equityData = useMemo(() => {
@@ -82,11 +81,32 @@ export default function Analytics() {
     ];
   }, [trades, stats.initialCapital]);
 
-  const chartData = [
-    { name: 'Low Risk', value: trades.filter(t => t.conviction && t.conviction < 50).length, color: '#4edea3' },
-    { name: 'Mid Risk', value: trades.filter(t => t.conviction && t.conviction >= 50 && t.conviction < 80).length, color: '#10b981' },
-    { name: 'High Risk', value: trades.filter(t => t.conviction && t.conviction >= 80).length, color: '#c29961' },
-  ];
+  // Calculate Distribution for Recharts by Weight (Conviction)
+  const weightDistribution = useMemo(() => {
+    const weights = {
+      'S-Tier (90%+)': { name: 'S-Tier', value: 0, color: '#c29961' },
+      'A-Tier (70-89%)': { name: 'A-Tier', value: 0, color: '#10b981' },
+      'B-Tier (50-69%)': { name: 'B-Tier', value: 0, color: '#4edea3' },
+      'C-Tier (<50%)': { name: 'C-Tier', value: 0, color: '#3b82f6' }
+    };
+
+    trades.forEach(t => {
+      const conv = t.conviction || 0;
+      if (conv >= 90) weights['S-Tier (90%+)'].value++;
+      else if (conv >= 70) weights['A-Tier (70-89%)'].value++;
+      else if (conv >= 50) weights['B-Tier (50-69%)'].value++;
+      else weights['C-Tier (<50%)'].value++;
+    });
+
+    return Object.values(weights).filter(w => w.value > 0);
+  }, [trades]);
+
+  const winRate = useMemo(() => {
+    const closedTrades = trades.filter(t => t.status === 'CLOSED');
+    if (closedTrades.length === 0) return '0.0';
+    const wins = closedTrades.filter(t => (t.pnl || 0) > 0).length;
+    return ((wins / closedTrades.length) * 100).toFixed(1);
+  }, [trades]);
 
   return (
     <Layout pageTitle="Analytics Studio">
@@ -183,9 +203,9 @@ export default function Analytics() {
                 <MoreVertical className="w-4 h-4 text-on-surface-variant/20 cursor-pointer" />
              </div>
              
-             <div className="flex-1 w-full italic">
+              <div className="flex-1 w-full italic">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} margin={{ top: 20, right: 30, left: -20, bottom: 0 }}>
+                  <BarChart data={weightDistribution} margin={{ top: 20, right: 30, left: -20, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1f1f1f" />
                     <XAxis 
                       dataKey="name" 
@@ -204,7 +224,7 @@ export default function Analytics() {
                       itemStyle={{ color: '#c29961', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase' }}
                     />
                     <Bar dataKey="value" radius={[2, 2, 0, 0]} barSize={40}>
-                      {chartData.map((entry, index) => (
+                      {weightDistribution.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color} fillOpacity={0.8} />
                       ))}
                     </Bar>
