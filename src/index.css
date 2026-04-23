@@ -1,0 +1,63 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap');
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+
+  /* Elegant Dark Theme Colors */
+  --color-surface: #050505;
+  --color-surface-dim: #050505;
+  --color-surface-bright: #1f1f1f;
+  --color-surface-container-lowest: #0a0a0a;
+  --color-surface-container-low: #0d0d0d;
+  --color-surface-container: #111111;
+  --color-surface-container-high: #191919;
+  --color-surface-container-highest: #1f1f1f;
+  --color-on-surface: #ededed;
+  --color-on-surface-variant: #888888;
+  
+  --color-primary: #c29961;
+  --color-on-primary: #050505;
+  --color-primary-container: #3d3429;
+  --color-on-primary-container: #c29961;
+  
+  --color-secondary: #e5c797;
+  --color-on-secondary: #050505;
+  
+  --color-tertiary: #b33939;
+  --color-on-tertiary: #ffffff;
+  
+  --color-error: #ff5252;
+  --color-on-error: #000000;
+  
+  --color-outline: #1f1f1f;
+  --color-outline-variant: #2a2a2a;
+
+  --radius-xs: 0.125rem;
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.5rem;
+}
+
+@layer base {
+  body {
+    @apply bg-surface text-on-surface font-sans antialiased;
+  }
+}
+
+/* Custom scrollbar for institutional feel */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  @apply bg-surface;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-outline-variant rounded-full;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-outline;
+}

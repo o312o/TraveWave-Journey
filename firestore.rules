@@ -1,0 +1,85 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Phase 3: Primitives
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isVerified() { return request.auth.token.email_verified == true; }
+    
+    // Admin check: Only if app needs it. User runtime email: 312working@gmail.com
+    function isAdmin() { 
+      return isSignedIn() && (
+        request.auth.token.email == '312working@gmail.com' && isVerified()
+      ); 
+    }
+
+    // 1. Users Collection
+    match /users/{userId} {
+      function isValidUser(data) {
+        return data.email is string && data.email.size() <= 200 &&
+               data.initialCapital is number && data.initialCapital >= 0 &&
+               data.currentBalance is number &&
+               data.peakEquity is number &&
+               data.keys().hasAll(['email', 'initialCapital', 'currentBalance', 'peakEquity']) &&
+               data.keys().size() <= 10;
+      }
+
+      allow get: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && isValidUser(incoming()) && isVerified();
+      allow update: if (isOwner(userId) || isAdmin()) && isValidUser(incoming()) && (
+        isAdmin() || (
+            incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'avatarUrl', 'currentBalance', 'peakEquity'])
+        )
+      );
+    }
+
+    // 2. Trades Collection
+    match /users/{userId}/trades/{tradeId} {
+      function isValidTrade(data) {
+        return data.asset is string && data.asset.size() <= 50 &&
+               data.type in ['LONG', 'SHORT'] &&
+               data.status in ['OPEN', 'CLOSED'] &&
+               data.entryPrice is number && data.entryPrice > 0 &&
+               data.userId == request.auth.uid &&
+               data.keys().hasAll(['asset', 'type', 'status', 'entryPrice', 'userId']) &&
+               data.keys().size() <= 20;
+      }
+
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if (isOwner(userId) || isAdmin()) && resource.data.userId == request.auth.uid;
+      allow create: if isOwner(userId) && isValidId(tradeId) && isValidTrade(incoming()) && isVerified();
+      allow update: if (isOwner(userId) || isAdmin()) && isValidTrade(incoming()) && (
+        isAdmin() || (
+          // Allow updating status and PnL, but not userId or asset
+          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'exitPrice', 'pnl', 'pnlPercentage', 'notes', 'screenshotUrl']) &&
+          incoming().userId == existing().userId &&
+          incoming().asset == existing().asset
+        )
+      );
+      allow delete: if isOwner(userId) || isAdmin();
+    }
+
+    // 3. Settings Collection
+    match /users/{userId}/settings/risk {
+      function isValidRiskSettings(data) {
+        return data.defaultRiskPerTrade is number && data.defaultRiskPerTrade >= 0 &&
+               data.dailyLossLimit is number && data.dailyLossLimit >= 0 &&
+               data.keys().hasAll(['defaultRiskPerTrade', 'dailyLossLimit']) &&
+               data.keys().size() <= 10;
+      }
+
+      allow get: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && isValidRiskSettings(incoming()) && isVerified();
+      allow update: if (isOwner(userId) || isAdmin()) && isValidRiskSettings(incoming());
+    }
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User account information and summary statistics.",
+      "type": "object",
+      "properties": {
+        "displayName": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "avatarUrl": { "type": "string" },
+        "initialCapital": { "type": "number" },
+        "currentBalance": { "type": "number" },
+        "peakEquity": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "initialCapital"]
+    },
+    "Trade": {
+      "title": "Trade Record",
+      "description": "Information about a specific trade execution.",
+      "type": "object",
+      "properties": {
+        "asset": { "type": "string" },
+        "type": { "type": "string", "enum": ["LONG", "SHORT"] },
+        "status": { "type": "string", "enum": ["OPEN", "CLOSED"] },
+        "entryPrice": { "type": "number" },
+        "stopLoss": { "type": "number" },
+        "takeProfit": { "type": "number" },
+        "exitPrice": { "type": "number" },
+        "pnl": { "type": "number" },
+        "pnlPercentage": { "type": "number" },
+        "bias": { "type": "string", "enum": ["LONG", "SHORT", "NEUTRAL"] },
+        "conviction": { "type": "number" },
+        "notes": { "type": "string" },
+        "screenshotUrl": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "userId": { "type": "string" }
+      },
+      "required": ["asset", "type", "status", "entryPrice", "userId"]
+    },
+    "RiskSettings": {
+      "title": "Risk Settings",
+      "description": "Global risk parameters for the user's trading.",
+      "type": "object",
+      "properties": {
+        "defaultRiskPerTrade": { "type": "number" },
+        "dailyLossLimit": { "type": "number" },
+        "maxOpenPositions": { "type": "number" },
+        "maxDrawdownLimit": { "type": "number" }
+      },
+      "required": ["defaultRiskPerTrade", "dailyLossLimit"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "User profiles and account statistics."
+    },
+    "users/{userId}/trades/{tradeId}": {
+      "schema": "Trade",
+      "description": "Trade executions for a specific user."
+    },
+    "users/{userId}/settings/risk": {
+      "schema": "RiskSettings",
+      "description": "User-specific risk configuration."
+    }
+  }
+}
