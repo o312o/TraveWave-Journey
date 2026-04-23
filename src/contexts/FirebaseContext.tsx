@@ -15,7 +15,8 @@ import {
   query,
   orderBy,
   addDoc,
-  writeBatch
+  writeBatch,
+  getDoc
 } from 'firebase/firestore';
 import { auth, db, testFirestoreConnection } from '../lib/firebase';
 import { Trade } from '../types';
@@ -44,14 +45,34 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
 
       if (user) {
-        // Ensure user profile exists
-        const userDoc = doc(db, 'users', user.uid);
-        await setDoc(userDoc, {
-          email: user.email,
-          displayName: user.displayName,
-          avatarUrl: user.photoURL,
-          updatedAt: serverTimestamp()
-        }, { merge: true });
+        // Ensure user profile exists with all required fields for security rules
+        try {
+          const userDocRef = doc(db, 'users', user.uid);
+          const userDocSnap = await getDoc(userDocRef);
+          
+          if (!userDocSnap.exists()) {
+            await setDoc(userDocRef, {
+              email: user.email,
+              displayName: user.displayName || 'Vanguard Operator',
+              avatarUrl: user.photoURL || null,
+              initialCapital: 100000,
+              currentBalance: 100000,
+              peakEquity: 100000,
+              updatedAt: serverTimestamp(),
+              createdAt: serverTimestamp()
+            });
+          } else {
+            // Update profile info if changed
+            await setDoc(userDocRef, {
+              email: user.email,
+              displayName: user.displayName || 'Vanguard Operator',
+              avatarUrl: user.photoURL || userDocSnap.data()?.avatarUrl || null,
+              updatedAt: serverTimestamp()
+            }, { merge: true });
+          }
+        } catch (error) {
+          console.error("Critical: Failed to sync user profile node:", error);
+        }
 
         // Subscribe to trades
         const tradesRef = collection(db, 'users', user.uid, 'trades');
@@ -98,6 +119,7 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
         pnl: 1699.67,
         status: 'CLOSED',
         notes: 'Institutional absorption at monthly S/R. High conviction breakout.',
+        userId: user.uid,
         timestamp: new Date(Date.now() - 86400000 * 2).getTime(),
         createdAt: serverTimestamp()
       },
@@ -111,6 +133,7 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
         pnl: 129.70,
         status: 'CLOSED',
         notes: 'Clean distribution pattern on H4. Expansion below liquidity void.',
+        userId: user.uid,
         timestamp: new Date(Date.now() - 86400000).getTime(),
         createdAt: serverTimestamp()
       },
@@ -124,6 +147,7 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
         takeProfit: 15600.00,
         status: 'OPEN',
         notes: 'Range expansion play. Neutral structure but localized momentum.',
+        userId: user.uid,
         timestamp: Date.now(),
         createdAt: serverTimestamp()
       }

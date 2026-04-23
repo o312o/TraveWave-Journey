@@ -1,12 +1,12 @@
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { Download, MoreVertical, Receipt, PieChart as PieChartIcon, CreditCard } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, AreaChart, Area } from 'recharts';
+import { Download, MoreVertical, Receipt, PieChart as PieChartIcon, CreditCard, TrendingUp as TrendingUpIcon, Activity as ActivityIcon } from 'lucide-react';
 import Layout from '../components/Layout';
 import { useFirebase } from '../contexts/FirebaseContext';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import * as XLSX from 'xlsx';
-import { toJSDate } from '../lib/utils';
+import { toJSDate, cn } from '../lib/utils';
 
 export default function Analytics() {
   const { trades, user } = useFirebase();
@@ -15,25 +15,32 @@ export default function Analytics() {
   const exportToExcel = () => {
     if (trades.length === 0) return;
     
-    const data = trades.map(t => {
+    // Sort trades by date for chronological export
+    const sortedTrades = [...trades].sort((a, b) => {
+      const dateA = toJSDate(a.timestamp)?.getTime() || 0;
+      const dateB = toJSDate(b.timestamp)?.getTime() || 0;
+      return dateA - dateB;
+    });
+
+    const data = sortedTrades.map(t => {
       const date = toJSDate(t.timestamp);
       return {
-        'Timestamp': date ? date.toLocaleString() : 'N/A',
-        'Asset': t.asset,
+        'Execution Date': date ? date.toLocaleString() : 'N/A',
+        'Asset Group': t.asset,
         'Type': t.type,
-        'Bias': t.bias,
-        'Entry Price': t.entryPrice,
-        'Exit Price': t.exitPrice || 'N/A',
-        'PnL ($)': t.pnl || 0,
-        'Status': t.status,
-        'Notes': t.notes || ''
+        'Structure Bias': t.bias,
+        'Entry Identifier': t.entryPrice,
+        'Exit Identifier': t.exitPrice || 'PENDING',
+        'Net Yield ($)': t.pnl || 0,
+        'Operational Status': t.status,
+        'Technical Notes': t.notes || 'No data recorded'
       };
     });
 
     const worksheet = XLSX.utils.json_to_sheet(data);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Trades');
-    XLSX.writeFile(workbook, `Vanguard_Trades_${new Date().toISOString().split('T')[0]}.xlsx`);
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Technical Archive');
+    XLSX.writeFile(workbook, `Vanguard_Performance_Audit_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
   useEffect(() => {
@@ -53,6 +60,27 @@ export default function Analytics() {
 
   const netProfit = stats.currentBalance - stats.initialCapital;
   const winRate = trades.length > 0 ? (trades.filter(t => t.pnl && t.pnl > 0).length / trades.length * 100).toFixed(1) : '0.0';
+
+  // Calculate Equity Curve Data
+  const equityData = useMemo(() => {
+    const sorted = [...trades].sort((a, b) => {
+      const dateA = toJSDate(a.timestamp)?.getTime() || 0;
+      const dateB = toJSDate(b.timestamp)?.getTime() || 0;
+      return dateA - dateB;
+    });
+
+    let currentEquity = stats.initialCapital;
+    return [
+      { name: 'Initial', value: stats.initialCapital },
+      ...sorted.map((t, index) => {
+        currentEquity += (t.pnl || 0);
+        return {
+          name: `T-${index + 1}`,
+          value: currentEquity
+        };
+      })
+    ];
+  }, [trades, stats.initialCapital]);
 
   const chartData = [
     { name: 'Low Risk', value: trades.filter(t => t.conviction && t.conviction < 50).length, color: '#4edea3' },
@@ -101,10 +129,57 @@ export default function Analytics() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Main Chart */}
+          {/* Equity Chart */}
           <div className="bg-surface-container border border-outline rounded-2xl p-8 flex flex-col h-[500px] shadow-2xl shadow-black/20">
              <div className="flex justify-between items-center border-b border-outline pb-6 mb-8">
-                <h3 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant/60">Execution Density by Conviction</h3>
+                <div className="flex items-center gap-3">
+                  <TrendingUpIcon className="w-4 h-4 text-primary" />
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant/60">Equity Growth Terminal</h3>
+                </div>
+                <span className="text-[10px] font-bold text-primary italic uppercase tracking-tighter">Real-time Progression</span>
+             </div>
+             
+             <div className="flex-1 w-full italic">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={equityData} margin={{ top: 20, right: 30, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorEquity" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#c29961" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#c29961" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1f1f1f" />
+                    <XAxis 
+                      dataKey="name" 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fill: '#555', fontSize: 10, fontWeight: 700 }} 
+                    />
+                    <YAxis 
+                      domain={['auto', 'auto']}
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fill: '#555', fontSize: 10, fontWeight: 700 }} 
+                    />
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: '#050505', border: '1px solid #1f1f1f', borderRadius: '12px', padding: '12px' }}
+                      itemStyle={{ color: '#c29961', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase' }}
+                      labelStyle={{ color: '#555', fontSize: '10px', marginBottom: '4px' }}
+                      formatter={(value: number) => [`$${value.toLocaleString()}`, 'Equity']}
+                    />
+                    <Area type="monotone" dataKey="value" stroke="#c29961" fillOpacity={1} fill="url(#colorEquity)" strokeWidth={2} />
+                  </AreaChart>
+                </ResponsiveContainer>
+             </div>
+          </div>
+
+          {/* Execution Density Chart */}
+          <div className="bg-surface-container border border-outline rounded-2xl p-8 flex flex-col h-[500px] shadow-2xl shadow-black/20">
+             <div className="flex justify-between items-center border-b border-outline pb-6 mb-8">
+                <div className="flex items-center gap-3">
+                  <ActivityIcon className="w-4 h-4 text-primary" />
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant/60">Risk Distribution Entropy</h3>
+                </div>
                 <MoreVertical className="w-4 h-4 text-on-surface-variant/20 cursor-pointer" />
              </div>
              
@@ -137,44 +212,67 @@ export default function Analytics() {
                 </ResponsiveContainer>
              </div>
           </div>
+        </div>
 
-          {/* History Table */}
-          <div className="bg-surface-container border border-outline rounded-2xl flex flex-col h-[500px] overflow-hidden shadow-2xl shadow-black/20">
-            <div className="px-8 py-6 border-b border-outline flex justify-between items-center">
-              <h3 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant/60">Execution Archive</h3>
-              <button className="text-[10px] font-black uppercase tracking-widest text-primary hover:underline italic">Deep Scan</button>
-            </div>
-            <div className="flex-1 overflow-y-auto">
-              <table className="w-full text-left border-collapse">
-                <thead className="bg-surface sticky top-0 z-10">
-                   <tr className="text-[9px] font-black uppercase tracking-widest text-on-surface-variant/40 border-b border-outline">
-                      <th className="px-8 py-4 whitespace-nowrap">Session Timestamp</th>
-                      <th className="px-8 py-4">Symbol</th>
-                      <th className="px-8 py-4">Structure Details</th>
-                      <th className="px-8 py-4 text-right">Yield</th>
-                   </tr>
-                </thead>
-                <tbody className="text-xs italic">
-                  {trades.map(trade => (
-                    <tr key={trade.id} className="border-b border-outline/30 hover:bg-surface-container-high transition-colors group">
-                      <td className="px-8 py-5 text-on-surface-variant/60 font-light whitespace-nowrap">
-                        {toJSDate(trade.timestamp)?.toLocaleString() || 'Pending'}
-                      </td>
-                      <td className="px-8 py-5 font-bold text-on-surface">{trade.asset}</td>
-                      <td className="px-8 py-5 text-on-surface-variant/60 max-w-xs truncate">{trade.notes || 'No notes provisioned'}</td>
-                      <td className={`px-8 py-5 text-right font-light tracking-tighter ${trade.pnl && trade.pnl >= 0 ? 'text-primary' : 'text-tertiary'}`}>
-                        {trade.pnl && trade.pnl >= 0 ? '+' : ''}${trade.pnl?.toLocaleString() || '0'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {trades.length === 0 && (
-                <div className="flex-1 flex items-center justify-center text-on-surface-variant/20 italic text-sm py-20">
-                  Historical archive empty. Initiate primary execution.
-                </div>
-              )}
-            </div>
+        {/* Expanded History Table */}
+        <div className="bg-surface-container border border-outline rounded-2xl flex flex-col shadow-2xl shadow-black/20 overflow-hidden">
+          <div className="px-8 py-6 border-b border-outline flex justify-between items-center">
+            <h3 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant/60">Full Execution Archive</h3>
+            <span className="text-[10px] font-black uppercase tracking-widest text-primary italic">Deep Intelligence Sync</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                 <tr className="text-[9px] font-black uppercase tracking-widest text-on-surface-variant/40 border-b border-outline bg-surface">
+                    <th className="px-8 py-4 whitespace-nowrap">Timestamp</th>
+                    <th className="px-8 py-4">Symbol</th>
+                    <th className="px-8 py-4">Bias</th>
+                    <th className="px-8 py-4">Entry</th>
+                    <th className="px-8 py-4">Exit</th>
+                    <th className="px-8 py-4">Status</th>
+                    <th className="px-8 py-4">Technical Notes</th>
+                    <th className="px-8 py-4 text-right">Net Yield</th>
+                 </tr>
+              </thead>
+              <tbody className="text-xs italic">
+                {trades.map(trade => (
+                  <tr key={trade.id} className="border-b border-outline/30 hover:bg-surface-container-high transition-colors group">
+                    <td className="px-8 py-5 text-on-surface-variant/60 font-light whitespace-nowrap">
+                      {toJSDate(trade.timestamp)?.toLocaleString() || 'Pending'}
+                    </td>
+                    <td className="px-8 py-5 font-bold text-on-surface">{trade.asset}</td>
+                    <td className="px-8 py-5">
+                      <span className={cn(
+                        "px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-tighter",
+                        trade.bias === 'LONG' ? "bg-primary/10 text-primary border border-primary/20" : "bg-tertiary/10 text-tertiary border border-tertiary/20"
+                      )}>
+                        {trade.bias}
+                      </span>
+                    </td>
+                    <td className="px-8 py-5 text-on-surface-variant/60 font-light">${trade.entryPrice?.toLocaleString()}</td>
+                    <td className="px-8 py-5 text-on-surface-variant/60 font-light">{trade.exitPrice ? `$${trade.exitPrice.toLocaleString()}` : '—'}</td>
+                    <td className="px-8 py-5">
+                       <span className={cn("text-[9px] font-bold uppercase tracking-widest", trade.status === 'CLOSED' ? "text-on-surface-variant/40" : "text-primary")}>
+                         {trade.status}
+                       </span>
+                    </td>
+                    <td className="px-8 py-5 text-on-surface-variant/60 max-w-md">
+                      <div className="line-clamp-2 hover:line-clamp-none transition-all cursor-default">
+                        {trade.notes || <span className="opacity-20 italic">No notes provisioned for this execution node.</span>}
+                      </div>
+                    </td>
+                    <td className={`px-8 py-5 text-right font-light tracking-tighter ${trade.pnl && trade.pnl >= 0 ? 'text-primary' : 'text-tertiary'}`}>
+                      {trade.pnl && trade.pnl >= 0 ? '+' : ''}${trade.pnl?.toLocaleString() || '0'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {trades.length === 0 && (
+              <div className="flex-1 flex items-center justify-center text-on-surface-variant/20 italic text-sm py-24">
+                Historical archive empty. Initiate primary execution.
+              </div>
+            )}
           </div>
         </div>
       </div>
