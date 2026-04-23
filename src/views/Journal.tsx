@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Target, TrendingUp, TrendingDown, Minus, Upload, ShieldCheck, Save, X } from 'lucide-react';
 import Layout from '../components/Layout';
 import { cn } from '../lib/utils';
@@ -16,6 +16,9 @@ export default function Journal() {
   const [entryPrice, setEntryPrice] = useState('');
   const [stopLoss, setStopLoss] = useState('');
   const [takeProfit, setTakeProfit] = useState('');
+  const [exitPrice, setExitPrice] = useState('');
+  const [pnl, setPnl] = useState('');
+  const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -27,13 +30,16 @@ export default function Journal() {
       const tradesRef = collection(db, 'users', user.uid, 'trades');
       await addDoc(tradesRef, {
         asset,
-        type: bias === 'NEUTRAL' ? 'LONG' : bias, // Fallback for simple model
+        type: bias === 'NEUTRAL' ? 'LONG' : bias,
         bias,
         conviction,
         entryPrice: parseFloat(entryPrice),
         stopLoss: parseFloat(stopLoss) || 0,
         takeProfit: parseFloat(takeProfit) || 0,
-        status: 'OPEN',
+        exitPrice: parseFloat(exitPrice) || null,
+        pnl: parseFloat(pnl) || null,
+        notes,
+        status: exitPrice ? 'CLOSED' : 'OPEN',
         userId: user.uid,
         timestamp: serverTimestamp(),
         createdAt: serverTimestamp(),
@@ -133,24 +139,39 @@ export default function Journal() {
               <PriceInput label="Invalidation Point (SL)" placeholder="0.00" value={stopLoss} onChange={(e: any) => setStopLoss(e.target.value)} />
               <PriceInput label="Expansion Target (TP)" placeholder="0.00" value={takeProfit} onChange={(e: any) => setTakeProfit(e.target.value)} subColor="text-primary" />
               
-              <div className="bg-surface border border-outline rounded-lg p-4 flex justify-between items-center">
-                <span className="text-[9px] uppercase tracking-widest text-on-surface-variant/60 font-bold">Risk Management Ratio</span>
-                <span className="text-sm font-bold text-primary italic">Calculated at entry</span>
+              <div className="border-t border-outline/30 pt-6 space-y-6">
+                <PriceInput label="Actual Exit Price" placeholder="0.00" value={exitPrice} onChange={(e: any) => setExitPrice(e.target.value)} />
+                <PriceInput label="Net Profit / Loss ($)" placeholder="0.00" value={pnl} onChange={(e: any) => setPnl(e.target.value)} subColor={parseFloat(pnl) >= 0 ? "text-primary" : "text-tertiary"} />
               </div>
             </div>
           </div>
 
-          {/* Screenshot Upload UI Placeholder */}
-          <div className="md:col-span-2 bg-surface-container border border-outline rounded-xl p-10 space-y-6">
-            <div className="flex items-center justify-between border-b border-outline pb-4">
-              <h3 className="font-bold text-xs uppercase tracking-widest text-on-surface-variant">Technical Documentation</h3>
-              <Upload className="w-4 h-4 text-primary" />
+          {/* Screenshot & Details */}
+          <div className="md:col-span-2 bg-surface-container border border-outline rounded-xl p-10 space-y-10">
+            <div>
+              <div className="flex items-center justify-between border-b border-outline pb-4 mb-6">
+                <h3 className="font-bold text-xs uppercase tracking-widest text-on-surface-variant">Strategic Structure & Notes</h3>
+                <ShieldCheck className="w-4 h-4 text-primary" />
+              </div>
+              <textarea 
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Describe the technical setup, higher timeframe context, and institutional flow..."
+                className="w-full bg-surface border border-outline rounded-xl py-4 px-6 text-sm text-on-surface placeholder:text-on-surface-variant/20 focus:outline-none focus:border-primary/50 transition-all min-h-[150px] resize-none"
+              ></textarea>
             </div>
-            
-            <div className="border-2 border-dashed border-outline-variant rounded-2xl py-16 flex flex-col items-center justify-center text-center group hover:bg-surface-container-high hover:border-primary/30 transition-all cursor-pointer">
-              <Upload className="w-8 h-8 text-on-surface-variant/20 mb-4 group-hover:text-primary transition-colors" />
-              <p className="text-xs font-bold text-on-surface uppercase tracking-widest mb-1">Upload Technical Analysis</p>
-              <p className="text-[10px] text-on-surface-variant/40 font-medium">PNG, JPG, TIFF (MAX 5MB)</p>
+
+            <div>
+              <div className="flex items-center justify-between border-b border-outline pb-4 mb-6">
+                <h3 className="font-bold text-xs uppercase tracking-widest text-on-surface-variant">Technical Documentation</h3>
+                <Upload className="w-4 h-4 text-primary" />
+              </div>
+              
+              <div className="border-2 border-dashed border-outline-variant rounded-2xl py-12 flex flex-col items-center justify-center text-center group hover:bg-surface-container-high hover:border-primary/30 transition-all cursor-pointer">
+                <Upload className="w-8 h-8 text-on-surface-variant/20 mb-4 group-hover:text-primary transition-colors" />
+                <p className="text-xs font-bold text-on-surface uppercase tracking-widest mb-1">Upload Technical Analysis</p>
+                <p className="text-[10px] text-on-surface-variant/40 font-medium">PNG, JPG, TIFF (MAX 5MB)</p>
+              </div>
             </div>
           </div>
 
@@ -198,7 +219,7 @@ function BiasButton({ active, onClick, icon: Icon, label, color }: any) {
   );
 }
 
-function PriceInput({ label, placeholder, subColor }: any) {
+function PriceInput({ label, placeholder, subColor, value, onChange, required }: any) {
   return (
     <div>
       <label className="block text-[10px] uppercase tracking-widest text-on-surface-variant/40 font-bold mb-2">{label}</label>
@@ -206,6 +227,10 @@ function PriceInput({ label, placeholder, subColor }: any) {
         <span className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant/20 text-sm font-light pointer-events-none transition-colors group-focus-within:text-primary">$</span>
         <input 
           type="number" 
+          step="any"
+          value={value}
+          onChange={onChange}
+          required={required}
           placeholder={placeholder} 
           className={cn(
             "w-full bg-surface border border-outline rounded-lg py-3 pl-10 pr-4 text-sm text-on-surface placeholder:text-on-surface-variant/10 focus:outline-none focus:border-primary/50 transition-all",

@@ -2,7 +2,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import Layout from '../components/Layout';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, startOfWeek, endOfWeek } from 'date-fns';
 import { useFirebase } from '../contexts/FirebaseContext';
-import { cn } from '../lib/utils';
+import { cn, toJSDate } from '../lib/utils';
 import { useState } from 'react';
 
 export default function Calendar() {
@@ -20,7 +20,10 @@ export default function Calendar() {
   });
 
   const getDayTrades = (day: Date) => {
-    return trades.filter(t => t.timestamp && isSameDay(new Date(t.timestamp as any), day));
+    return trades.filter(t => {
+      const date = toJSDate(t.timestamp);
+      return date && isSameDay(date, day);
+    });
   };
 
   const getDayPnL = (day: Date) => {

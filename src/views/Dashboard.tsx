@@ -1,7 +1,7 @@
 import { ArrowUpRight, TrendingUp, Activity, Target } from 'lucide-react';
 import Layout from '../components/Layout';
 import { useFirebase } from '../contexts/FirebaseContext';
-import { cn } from '../lib/utils';
+import { cn, toJSDate } from '../lib/utils';
 import { useEffect, useState } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -9,7 +9,7 @@ import { formatDistanceToNow } from 'date-fns';
 
 export default function Dashboard() {
   const { trades, user } = useFirebase();
-  const [stats, setStats] = useState({ initialCapital: 100000, currentBalance: 112450, peakEquity: 115000 });
+  const [stats, setStats] = useState({ initialCapital: 100000, currentBalance: 112450, peakEquity: 115000, displayName: '', avatarUrl: '' });
 
   useEffect(() => {
     async function fetchStats() {
@@ -21,6 +21,8 @@ export default function Dashboard() {
           initialCapital: data.initialCapital || 100000,
           currentBalance: data.currentBalance || 112450,
           peakEquity: data.peakEquity || 115000,
+          displayName: data.displayName || user.displayName || 'Vanguard Operator',
+          avatarUrl: data.avatarUrl || user.photoURL || 'https://images.unsplash.com/photo-1540569014015-19a7be504e3a?auto=format&fit=crop&q=80&w=200&h=200',
         });
       }
     }
@@ -33,9 +35,18 @@ export default function Dashboard() {
   return (
     <Layout pageTitle="Executive Dashboard">
       <div className="max-w-7xl mx-auto space-y-10">
-        <div>
-          <h2 className="text-3xl font-light tracking-tighter text-on-surface mb-1 italic">Executive Dashboard</h2>
-          <p className="text-on-surface-variant text-xs uppercase tracking-widest font-bold">Workspace Overview</p>
+        <div className="flex justify-between items-end">
+          <div>
+            <h2 className="text-3xl font-light tracking-tighter text-on-surface mb-1 italic">Vanguard Console</h2>
+            <p className="text-on-surface-variant text-xs uppercase tracking-widest font-bold">Operator: {stats.displayName}</p>
+          </div>
+          <div className="flex items-center gap-4 bg-surface-container border border-outline px-4 py-2 rounded-2xl">
+            <div className="text-right">
+              <p className="text-[9px] uppercase font-black tracking-widest text-on-surface-variant/40">Authorized Node</p>
+              <p className="text-[10px] font-bold text-on-surface uppercase tracking-tighter">{user?.email}</p>
+            </div>
+            <img src={stats.avatarUrl} className="w-10 h-10 rounded-xl object-cover border border-primary/20" alt="Operator avatar" />
+          </div>
         </div>
 
         {/* Stats Grid */}
@@ -112,7 +123,10 @@ export default function Dashboard() {
                     dotColor={trade.pnl && trade.pnl > 0 ? "bg-primary" : trade.pnl && trade.pnl < 0 ? "bg-tertiary" : "bg-on-surface-variant/40"} 
                     title={trade.asset} 
                     subtitle={`${trade.type} position record`} 
-                    time={trade.timestamp ? formatDistanceToNow(new Date(trade.timestamp as any).getTime()) + " ago" : "just now"} 
+                    time={(() => {
+                      const date = toJSDate(trade.timestamp);
+                      return date ? formatDistanceToNow(date) + " ago" : "just now";
+                    })()} 
                   />
                 ))
               ) : (

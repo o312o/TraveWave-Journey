@@ -13,7 +13,9 @@ import {
   serverTimestamp,
   collection,
   query,
-  orderBy
+  orderBy,
+  addDoc,
+  writeBatch
 } from 'firebase/firestore';
 import { auth, db, testFirestoreConnection } from '../lib/firebase';
 import { Trade } from '../types';
@@ -24,6 +26,7 @@ interface FirebaseContextType {
   trades: Trade[];
   login: () => Promise<void>;
   logout: () => Promise<void>;
+  seedData: () => Promise<void>;
 }
 
 const FirebaseContext = createContext<FirebaseContextType | undefined>(undefined);
@@ -80,8 +83,59 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
     await signOut(auth);
   };
 
+  const seedData = async () => {
+    if (!user) return;
+    const tradesRef = collection(db, 'users', user.uid, 'trades');
+    
+    const sampleTrades = [
+      {
+        asset: 'BTCUSD',
+        type: 'LONG',
+        bias: 'LONG',
+        conviction: 85,
+        entryPrice: 62500.45,
+        exitPrice: 64200.12,
+        pnl: 1699.67,
+        status: 'CLOSED',
+        notes: 'Institutional absorption at monthly S/R. High conviction breakout.',
+        timestamp: new Date(Date.now() - 86400000 * 2).getTime(),
+        createdAt: serverTimestamp()
+      },
+      {
+        asset: 'ETHUSD',
+        type: 'SHORT',
+        bias: 'SHORT',
+        conviction: 65,
+        entryPrice: 3450.20,
+        exitPrice: 3320.50,
+        pnl: 129.70,
+        status: 'CLOSED',
+        notes: 'Clean distribution pattern on H4. Expansion below liquidity void.',
+        timestamp: new Date(Date.now() - 86400000).getTime(),
+        createdAt: serverTimestamp()
+      },
+      {
+        asset: 'NQZ3',
+        type: 'LONG',
+        bias: 'NEUTRAL',
+        conviction: 45,
+        entryPrice: 15420.00,
+        stopLoss: 15380.00,
+        takeProfit: 15600.00,
+        status: 'OPEN',
+        notes: 'Range expansion play. Neutral structure but localized momentum.',
+        timestamp: Date.now(),
+        createdAt: serverTimestamp()
+      }
+    ];
+
+    for (const trade of sampleTrades) {
+      await addDoc(tradesRef, trade);
+    }
+  };
+
   return (
-    <FirebaseContext.Provider value={{ user, loading, trades, login, logout }}>
+    <FirebaseContext.Provider value={{ user, loading, trades, login, logout, seedData }}>
       {children}
     </FirebaseContext.Provider>
   );

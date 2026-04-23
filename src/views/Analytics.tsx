@@ -5,10 +5,36 @@ import { useFirebase } from '../contexts/FirebaseContext';
 import { useEffect, useState } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import * as XLSX from 'xlsx';
+import { toJSDate } from '../lib/utils';
 
 export default function Analytics() {
   const { trades, user } = useFirebase();
   const [stats, setStats] = useState({ initialCapital: 100000, currentBalance: 112450 });
+
+  const exportToExcel = () => {
+    if (trades.length === 0) return;
+    
+    const data = trades.map(t => {
+      const date = toJSDate(t.timestamp);
+      return {
+        'Timestamp': date ? date.toLocaleString() : 'N/A',
+        'Asset': t.asset,
+        'Type': t.type,
+        'Bias': t.bias,
+        'Entry Price': t.entryPrice,
+        'Exit Price': t.exitPrice || 'N/A',
+        'PnL ($)': t.pnl || 0,
+        'Status': t.status,
+        'Notes': t.notes || ''
+      };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Trades');
+    XLSX.writeFile(workbook, `Vanguard_Trades_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
 
   useEffect(() => {
     async function fetchStats() {
@@ -42,8 +68,11 @@ export default function Analytics() {
             <h2 className="text-3xl font-light tracking-tighter text-on-surface mb-1 italic">Performance Analytics</h2>
             <p className="text-on-surface-variant text-[10px] uppercase tracking-widest font-bold">Institutional Intelligence</p>
           </div>
-          <button className="flex items-center gap-2 px-6 py-2.5 border border-primary/30 rounded-lg bg-surface hover:bg-primary hover:text-on-primary text-[10px] font-black uppercase tracking-widest text-primary transition-all shadow-xl shadow-primary/5">
-            <Download className="w-3 h-3" /> Export Technical Report
+          <button 
+            onClick={exportToExcel}
+            className="flex items-center gap-2 px-6 py-2.5 border border-primary/30 rounded-lg bg-surface hover:bg-primary hover:text-on-primary text-[10px] font-black uppercase tracking-widest text-primary transition-all shadow-xl shadow-primary/5"
+          >
+            <Download className="w-3 h-3" /> Export Technical Report (.XLSX)
           </button>
         </div>
 
@@ -119,16 +148,20 @@ export default function Analytics() {
               <table className="w-full text-left border-collapse">
                 <thead className="bg-surface sticky top-0 z-10">
                    <tr className="text-[9px] font-black uppercase tracking-widest text-on-surface-variant/40 border-b border-outline">
-                      <th className="px-8 py-4">Session Timestamp</th>
+                      <th className="px-8 py-4 whitespace-nowrap">Session Timestamp</th>
                       <th className="px-8 py-4">Symbol</th>
+                      <th className="px-8 py-4">Structure Details</th>
                       <th className="px-8 py-4 text-right">Yield</th>
                    </tr>
                 </thead>
                 <tbody className="text-xs italic">
                   {trades.map(trade => (
                     <tr key={trade.id} className="border-b border-outline/30 hover:bg-surface-container-high transition-colors group">
-                      <td className="px-8 py-5 text-on-surface-variant/60 font-light">{trade.timestamp ? formatDate(new Date(trade.timestamp as any).toISOString()) : 'Pending'}</td>
+                      <td className="px-8 py-5 text-on-surface-variant/60 font-light whitespace-nowrap">
+                        {toJSDate(trade.timestamp)?.toLocaleString() || 'Pending'}
+                      </td>
                       <td className="px-8 py-5 font-bold text-on-surface">{trade.asset}</td>
+                      <td className="px-8 py-5 text-on-surface-variant/60 max-w-xs truncate">{trade.notes || 'No notes provisioned'}</td>
                       <td className={`px-8 py-5 text-right font-light tracking-tighter ${trade.pnl && trade.pnl >= 0 ? 'text-primary' : 'text-tertiary'}`}>
                         {trade.pnl && trade.pnl >= 0 ? '+' : ''}${trade.pnl?.toLocaleString() || '0'}
                       </td>
